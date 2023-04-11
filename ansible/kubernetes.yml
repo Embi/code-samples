@@ -1,0 +1,182 @@
+---
+
+- name: "Kubernetes: Add repository"
+  yum_repository:
+    name: Kubernetes
+    description: Kubernetes
+    baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+    file: external_repos
+    enabled: yes
+    gpgcheck: yes
+    gpgkey:
+      - https://packages.cloud.google.com/yum/doc/yum-key.gpg
+      - https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+
+- name: "Kubernetes: Install package"
+  dnf:
+    name:
+      - kubelet-1.16.3-0.x86_64
+      - kubeadm-1.16.3-0.x86_64
+      - kubectl-1.16.3-0.x86_64
+    state: latest
+    update_cache: yes
+
+- name: "Kubernetes: Configure node ip"
+  template:
+    src: ../templates/kubelet.j2
+    dest: /etc/default/kubelet
+  notify: restart kubelet
+
+- name: "Kubernetes: Start kubelet"
+  service:
+    name: kubelet
+    state: started
+    enabled: yes
+    masked: no
+
+- name: "Kubernetes: Deploy load balancer"
+  block: 
+    - name: "Install HAproxy and Keepalived packages"
+      yum:
+        name:
+          - haproxy 
+          - keepalived
+        state: latest
+        update_cache: yes
+
+    - name: "Enable non-local IP address bind"
+      shell: |
+        echo 'net.ipv4.ip_nonlocal_bind=1' >> /etc/sysctl.conf
+        sysctl -p
+
+    - name: "Render keepalived files"
+      template:
+        src: ../templates/{{item.name}}.j2
+        dest: /etc/keepalived/{{item.name}}
+      loop:
+        - name: keepalived.conf
+        - name: check_apiserver.sh
+
+    - name: "Render haproxy config file"
+      template:
+        src: ../templates/haproxy.cfg.j2
+        dest: /etc/haproxy/haproxy.cfg
+
+    - name: "Start and enable haproxy"
+      service:
+        name: haproxy
+        state: started
+        enabled: yes
+        masked: no
+
+    - name: "Start and enable keepalived"
+      service:
+        name: keepalived
+        state: started
+        enabled: yes
+        masked: no
+
+  when: host_type == "master"
+
+
+- name: "Kubernetes: Initialize Cluster"
+  block:
+
+    - name: "Kubernetes: Generate kubeadm cluster config"
+      template:
+        src: ../templates/kubeadm-config.yaml.j2
+        dest: /etc/default/kubeadm-config.yaml
+
+    - name: "Kubernetes: check join command"
+      shell: "kubeadm token create --print-join-command"
+      register: __k8_join
+      failed_when: false
+      changed_when: false
+
+    - name: "Kubernetes: Generate certificate key"
+      shell: "kubeadm alpha certs certificate-key"
+      register: __k8_join_certificate
+
+    - name: "Kubernetes: Init Kubernetes cluster"
+      become: yes
+      shell: 'kubeadm init --certificate-key {{ __k8_join_certificate.stdout }} --control-plane-endpoint "{{ lb_vip }}:{{ apiserver_dest_port }}" --upload-certs'
+      when: __k8_join.rc == 1
+
+    - name: "Kubernetes: check join command"
+      shell: "kubeadm token create --print-join-command"
+      register: __k8_join
+      failed_when: false
+      changed_when: false
+
+    - name: "Kubernetes: Add K8S certificate"
+      add_host:
+        name:   "K8S_MASTER_JOIN_COMMAND"
+        join_command:  "{{ __k8_join.stdout }} --control-plane --certificate-key {{ __k8_join_certificate.stdout }}"
+      changed_when: false
+
+    - name: "Kubernetes: Add K8S join command"
+      add_host:
+        name:   "K8S_JOIN_COMMAND"
+        join_command:  "{{ __k8_join.stdout }}"
+      changed_when: false
+
+    - name: "Kubernetes: create .kube in root home"
+      file:
+        path: /root/.kube
+        state: directory
+
+    - name: "Kubernetes: /etc/sysctl.d/k8s.conf"
+      template:
+        src: ../templates/k8s.conf.j2
+        dest: /etc/sysctl.d/k8s.conf
+
+    - name: "Kubernetes: copy admin.conf to root home dir"
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /root/.kube/config
+        remote_src: yes
+
+    - name: "Kubernetes: weave config"
+      template:
+        src: ../templates/weave.yaml
+        dest: /opt/weave.yaml
+      
+    - name: "Kubernetes: apply cloud.weave.works"
+      shell: "kubectl apply -f /opt/weave.yaml"
+      changed_when: false
+
+  when: init_host
+
+- name: "Kubernetes: wait for master to init"
+  pause:
+    seconds: 30
+
+- name: "Kubernetes: check join node"
+  stat:
+    path: /etc/kubernetes/pki/ca.crt
+  register: __k8_check_node
+  when: not init_host
+
+- name: "Kubernetes: Join in other master nodes"
+  shell: "{{ hostvars['K8S_MASTER_JOIN_COMMAND']['join_command'] }}"
+  when:
+    - host_type == "master"
+    - not init_host
+    - not __k8_check_node.stat.exists
+
+- name: "Kubernetes: Allow to schedule pods on Master nodes"
+  shell: "kubectl taint nodes --all node-role.kubernetes.io/master-"
+  failed_when: false
+  changed_when: false
+  when: init_host
+
+- name: "Kubernetes: Join workers to master"
+  shell: "{{ hostvars['K8S_JOIN_COMMAND']['join_command'] }}"
+  when:
+    - host_type == "worker"
+    - not __k8_check_node.stat.exists
+
+- name: "Kubernates: label cluster nodes"
+  shell: "kubectl label node {{ hostvars[item]['hostname'] }} nodeType={{ hostvars[item]['host_type'] }}"
+  when: init_host
+  loop: "{{ groups['all'] }}"

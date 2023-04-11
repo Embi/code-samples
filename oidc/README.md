@@ -1,0 +1,5 @@
+- `__init__.py` - factory for OIDC client based on app configuration (Auth0 vs Fusionauth)
+- `auth0.py` - Implementation of the OIDC client for Auth0 backend
+- `fusionauth.py` - Implementation of the OIDC client for Fusionauth backend
+- `oidc_client.py` - Abstract singleton OIDC client 
+- `test_xy.py` - tests for respective modules
