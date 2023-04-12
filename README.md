@@ -8,8 +8,8 @@ implementation of an OIDC client that allows for easy implementation of various
 OIDC backends (this solution showcases two backends: Fusionauth and Auth0).
 
 ### [architecture](architecture)
-Software architecture that I designed and implemented for
-TailorInvest start-up (company ceased to exist for financial reasons). 
+Software/system architecture that I designed and implemented for
+Tailor Invest start-up (company ceased to exist for financial reasons). 
 Everything in the diagram was designed and implemented in a span of
 roughly 5 months.
 
