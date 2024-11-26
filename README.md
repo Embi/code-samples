@@ -19,9 +19,13 @@ network with VPN access. The solution also included a relatively complex
 multi-tenant database model.
 
 ### [Networking](networking)
-A diagram showing networking a solution I implemented for redirecting ipv4
-traffic over wireguard mash to honeypots running in on-premises infrastructure
-while preserving source and destination (bot IP and VPS IP) in IP packets.
+A diagram showing a networking solution I implemented for redirecting incoming 
+ipv4 traffic over wireguard "mash" to infrastructure running on premises.
+The caveat of the solution was to preserve source and destination in IP
+packets over all hops (i.e., reverse proxy was not an option). Also based on
+packets destination port, the packets were routed to different on-premises
+servers for processing. The whole solution (e.g., adding new VPS or adding new
+processing on-prem server) was fully automated with Ansible playbooks.
 
 ### [Ansible (Apache Druid)](ansible/druid)
 Ansible playbook for deployment of a single instance Apache Druid columnar
