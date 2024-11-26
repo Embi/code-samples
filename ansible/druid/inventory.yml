@@ -1,0 +1,43 @@
+all:
+  children:
+    dev:
+      hosts:
+        192.168.1.1:
+            postgresql_host: "192.168.1.2:5000"
+    stage:
+      hosts:
+        192.168.2.1:
+            postgresql_host: "192.168.2.2:5000"
+    prod:
+      hosts:
+        192.168.3.1:
+            postgresql_host: "192.168.3.2:5000"
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_ssh_user: ansible_service
+    ansible_private_key_file: "{{ lookup('ansible.builtin.env', 'SSH_PRIVATE_KEY') }}"
+    druid_s3_access_key: "{{ lookup('ansible.builtin.env', 'DRUID_S3_ACCESS_KEY') }}"
+    druid_s3_secret_key: "{{ lookup('ansible.builtin.env', 'DRUID_S3_SECRET_KEY') }}"
+    druid_s3_endpoint: "https://minio.{{env_target}}.network.net:9000"
+    druid_server_tls_pem_cert: "/etc/ssl/certs/{{env_target}}.network.net/server.crt"
+    druid_server_tls_pem_key: "/etc/ssl/certs/{{env_target}}.network.net/server.key"
+    druid_segments_s3_bucket: druid
+    druid_keystore_path: /opt/druid/keystore.jks
+    druid_truststore_path: /opt/druid/truststore.jks
+    druid_keystore_password: "{{ lookup('ansible.builtin.env', 'DRUID_KEYSTORE_PASSWORD') }}"
+    druid_admin_password: "{{ lookup('ansible.builtin.env', 'DRUID_ADMIN_PASSWORD') }}"
+    druid_system_user_password: "{{ lookup('ansible.builtin.env', 'DRUID_SYSTEM_USER_PASSWORD') }}"
+    druid_security_api: "https://druid.{{env_target}}.network.net:8281/druid-ext/basic-security"
+    kafka_clientkey_pem: "/opt/kafka-certs/clientkey.pem"
+    kafka_client_cert: "/opt/kafka-certs/client.cert"
+    kafka_ca_cert: "/opt/kafka-certs/cacert.pem"
+    kafka_keystore_password: "{{ lookup('ansible.builtin.env', 'KAFKA_KEYSTORE_PASSWORD') }}"
+    kafka_keystore_path: "/opt/kafka-certs/keystore.jks"
+    kafka_truststore_path: "/opt/kafka-certs/truststore.jks"
+    postgresql_password: "{{ lookup('ansible.builtin.env', 'POSTGRESQL_PASSWORD') }}"
+    postgresql_user: "druid"
+    druid_readonly_users:
+      - username: tester
+        password: "{{ lookup('ansible.builtin.env', 'DRUID_TESTER_USER_PASSWORD') }}"
+      - username: feed
+        password: "{{ lookup('ansible.builtin.env', 'DRUID_FEED_USER_PASSWORD') }}"

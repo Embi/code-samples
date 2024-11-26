@@ -1,0 +1,16 @@
+[
+    {
+        "resource": {
+            "name": "data",
+            "type": "DATASOURCE"
+        },
+        "action": "READ"
+    },
+    {
+        "resource": {
+            "name": "STATE",
+            "type": "STATE"
+        },
+        "action": "READ"
+    }
+]

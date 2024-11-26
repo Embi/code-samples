@@ -1,0 +1,42 @@
+- name: Create readonly_user Authorizer Role
+  shell: >
+    curl -X POST -u "admin:{{ druid_admin_password }}"
+    "{{ druid_security_api }}/authorization/db/Authorizer/roles/readonly_user"
+
+- name: Copy readonly_role permissions JSON
+  copy:
+    src: ../files/readonly_role.json 
+    dest: /opt/druid/readonly_role.json
+
+- name: Setup readonly_user role permissions
+  shell: >
+    curl -X POST -u "admin:{{ druid_admin_password }}"
+    -H 'Content-Type: application/json'
+    -d '@/opt/druid/readonly_role.json'
+    "{{ druid_security_api }}/authorization/db/Authorizer/roles/readonly_user/permissions"
+
+- name: Create Authenticator Users
+  shell: >
+    curl -X POST -u "admin:{{druid_admin_password}}"
+    "{{ druid_security_api }}/authentication/db/Authenticator/users/{{item.username}}"
+  with_items: "{{druid_readonly_users}}"
+
+- name: Create Authenticator User Credentials
+  shell: >
+    curl -X POST -u "admin:{{druid_admin_password}}"
+    -H 'Content-Type: application/json'
+    -d '{"password":"{{item.password}}"}'
+    "{{ druid_security_api }}/authentication/db/Authenticator/users/{{item.username}}/credentials"
+  with_items: "{{druid_readonly_users}}"
+
+- name: Create Authorizer Users
+  shell: >
+    curl -X POST -u "admin:{{druid_admin_password}}"
+    "{{ druid_security_api }}/authorization/db/Authorizer/users/{{item.username}}"
+  with_items: "{{druid_readonly_users}}"
+
+- name: Assign roles to Users
+  shell: >
+    curl -X POST -u "admin:{{druid_admin_password}}"
+    "{{ druid_security_api }}/authorization/db/Authorizer/users/{{item.username}}/roles/readonly_user"
+  with_items: "{{druid_readonly_users}}"
